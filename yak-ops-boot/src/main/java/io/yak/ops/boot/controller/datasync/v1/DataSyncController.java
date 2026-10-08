@@ -164,8 +164,7 @@ public class DataSyncController {
     @Operation(summary = "查询单表同步Attempt历史")
     @GetMapping("/instances/{id}/tables/{tableExecutionId}/attempts")
     public Result<List<DataSyncTableAttemptVO>> tableAttemptHistory(
-            @PathVariable("id") String id,
-            @PathVariable("tableExecutionId") String tableExecutionId) {
+            @PathVariable("id") String id, @PathVariable("tableExecutionId") String tableExecutionId) {
         return Result.success(dataSyncService.queryTableAttempts(id, tableExecutionId));
     }
 

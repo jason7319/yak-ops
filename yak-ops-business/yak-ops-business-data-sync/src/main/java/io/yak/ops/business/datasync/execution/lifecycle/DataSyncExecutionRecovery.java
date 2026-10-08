@@ -70,12 +70,10 @@ public class DataSyncExecutionRecovery {
             if (!runtimeExecution(execution)) continue;
             if (isMultiTable(execution)) {
                 tableAttemptLifecycle.cancelUnfinished(
-                        execution.getWorkspaceId(), execution.getId(),
-                        DataSyncTableExecutionStatus.LOST);
+                        execution.getWorkspaceId(), execution.getId(), DataSyncTableExecutionStatus.LOST);
             }
             attemptLifecycle.recordExecutionLost(
-                    execution.getWorkspaceId(), execution.getId(),
-                    "应用启动发现旧进程遗留 Runtime Execution，已标记为 LOST");
+                    execution.getWorkspaceId(), execution.getId(), "应用启动发现旧进程遗留 Runtime Execution，已标记为 LOST");
         }
 
         int retryScheduled = 0;
@@ -186,15 +184,19 @@ public class DataSyncExecutionRecovery {
     }
 
     private boolean isMultiTable(DataSyncInstanceEntity execution) {
-        if (execution.getSyncType() != DataSyncType.OFFLINE
-                || StringUtils.isBlank(execution.getDefinitionSnapshot())) return false;
+        if (execution.getSyncType() != DataSyncType.OFFLINE || StringUtils.isBlank(execution.getDefinitionSnapshot()))
+            return false;
         try {
             DataSyncDefinitionSnapshotVO snapshot =
                     JSONUtils.parseObject(execution.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class);
-            return snapshot.getTableRoutes() != null && snapshot.getTableRoutes().size() > 1;
+            return snapshot.getTableRoutes() != null
+                    && snapshot.getTableRoutes().size() > 1;
         } catch (RuntimeException exception) {
-            LOG.warn("检查多表快照失败，workspaceId={}, executionId={}, error={}",
-                    execution.getWorkspaceId(), execution.getId(), safeMessage(exception));
+            LOG.warn(
+                    "检查多表快照失败，workspaceId={}, executionId={}, error={}",
+                    execution.getWorkspaceId(),
+                    execution.getId(),
+                    safeMessage(exception));
             return false;
         }
     }

@@ -35,21 +35,33 @@ public class DataSyncTableAttemptLifecycle {
     @Transactional(rollbackFor = Exception.class)
     public DataSyncTableAttemptEntity begin(String workspaceId, String tableExecutionId, int attemptNo) {
         if (attemptNo < 1) throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED);
-        DataSyncTableExecutionStatus expected = attemptNo == 1
-                ? DataSyncTableExecutionStatus.PLANNED
-                : DataSyncTableExecutionStatus.RETRY_WAITING;
+        DataSyncTableExecutionStatus expected =
+                attemptNo == 1 ? DataSyncTableExecutionStatus.PLANNED : DataSyncTableExecutionStatus.RETRY_WAITING;
         if (attemptNo == 1
                 && !tableExecutionRepository.transition(
-                        workspaceId, tableExecutionId, expected, DataSyncTableExecutionStatus.PENDING,
-                        0, 0L, 0L, null, null)) {
+                        workspaceId,
+                        tableExecutionId,
+                        expected,
+                        DataSyncTableExecutionStatus.PENDING,
+                        0,
+                        0L,
+                        0L,
+                        null,
+                        null)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "表级执行不允许启动");
         }
-        DataSyncTableExecutionStatus beginStatus = attemptNo == 1
-                ? DataSyncTableExecutionStatus.PENDING
-                : DataSyncTableExecutionStatus.RETRY_WAITING;
+        DataSyncTableExecutionStatus beginStatus =
+                attemptNo == 1 ? DataSyncTableExecutionStatus.PENDING : DataSyncTableExecutionStatus.RETRY_WAITING;
         if (!tableExecutionRepository.transition(
-                workspaceId, tableExecutionId, beginStatus, DataSyncTableExecutionStatus.RUNNING,
-                attemptNo, 0L, 0L, null, null)) {
+                workspaceId,
+                tableExecutionId,
+                beginStatus,
+                DataSyncTableExecutionStatus.RUNNING,
+                attemptNo,
+                0L,
+                0L,
+                null,
+                null)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "表级执行状态已变化");
         }
 
@@ -63,25 +75,41 @@ public class DataSyncTableAttemptLifecycle {
         attempt.initCreate();
         if (tableAttemptRepository.add(attempt) == null
                 || !tableAttemptRepository.transition(
-                        workspaceId, attempt.getId(), DataSyncAttemptStatus.PENDING,
-                        DataSyncAttemptStatus.RUNNING, DateUtils.now(), null, null, null)) {
+                        workspaceId,
+                        attempt.getId(),
+                        DataSyncAttemptStatus.PENDING,
+                        DataSyncAttemptStatus.RUNNING,
+                        DateUtils.now(),
+                        null,
+                        null,
+                        null)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "创建表级 Attempt 失败");
         }
         return attempt;
     }
 
     public void updateMetrics(
-            String workspaceId, String tableExecutionId, String attemptId,
-            int attemptNo, long readRows, long writeRows) {
+            String workspaceId,
+            String tableExecutionId,
+            String attemptId,
+            int attemptNo,
+            long readRows,
+            long writeRows) {
         if (!tableAttemptRepository.updateMetrics(workspaceId, attemptId, readRows, writeRows)) return;
         tableExecutionRepository.updateMetrics(workspaceId, tableExecutionId, attemptNo, readRows, writeRows);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void complete(
-            String workspaceId, String tableExecutionId, String attemptId,
-            int attemptNo, long readRows, long writeRows,
-            DataSyncTableExecutionStatus target, Integer errorCode, String errorMessage) {
+            String workspaceId,
+            String tableExecutionId,
+            String attemptId,
+            int attemptNo,
+            long readRows,
+            long writeRows,
+            DataSyncTableExecutionStatus target,
+            Integer errorCode,
+            String errorMessage) {
         if (target != DataSyncTableExecutionStatus.SUCCEEDED
                 && target != DataSyncTableExecutionStatus.FAILED
                 && target != DataSyncTableExecutionStatus.RETRY_WAITING) {
@@ -92,13 +120,26 @@ public class DataSyncTableAttemptLifecycle {
                 ? DataSyncAttemptStatus.SUCCEEDED
                 : DataSyncAttemptStatus.FAILED;
         if (!tableAttemptRepository.transition(
-                workspaceId, attemptId, DataSyncAttemptStatus.RUNNING,
-                attemptStatus, null, DateUtils.now(), errorCode, errorMessage)) {
+                workspaceId,
+                attemptId,
+                DataSyncAttemptStatus.RUNNING,
+                attemptStatus,
+                null,
+                DateUtils.now(),
+                errorCode,
+                errorMessage)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "表级 Attempt 终态竞争失败");
         }
         if (!tableExecutionRepository.transition(
-                workspaceId, tableExecutionId, DataSyncTableExecutionStatus.RUNNING,
-                target, attemptNo, readRows, writeRows, errorCode, errorMessage)) {
+                workspaceId,
+                tableExecutionId,
+                DataSyncTableExecutionStatus.RUNNING,
+                target,
+                attemptNo,
+                readRows,
+                writeRows,
+                errorCode,
+                errorMessage)) {
             throw new DataSyncException(DataSyncErrorCode.ATTEMPT_PERSIST_FAILED, "表级 Execution 终态竞争失败");
         }
     }
@@ -109,19 +150,22 @@ public class DataSyncTableAttemptLifecycle {
             throw new IllegalArgumentException("only CANCELED / LOST are valid for unfinished table executions");
         }
         LocalDateTime now = DateUtils.now();
-        for (DataSyncTableExecutionEntity table : tableExecutionRepository.queryByExecution(workspaceId, rootExecutionId)) {
+        for (DataSyncTableExecutionEntity table :
+                tableExecutionRepository.queryByExecution(workspaceId, rootExecutionId)) {
             if (table.getStatus() != null && !table.getStatus().isTerminal()) {
                 if (target == DataSyncTableExecutionStatus.LOST) {
                     tableAttemptRepository.markActiveAsLost(
-                            workspaceId, table.getId(), now,
-                            DataSyncErrorCode.EXECUTION_LOST.getCode(), "执行进程所有权丢失");
+                            workspaceId, table.getId(), now, DataSyncErrorCode.EXECUTION_LOST.getCode(), "执行进程所有权丢失");
                 } else {
                     tableAttemptRepository.cancelActive(workspaceId, table.getId(), now);
                 }
             }
         }
         tableExecutionRepository.finishUnfinished(
-                workspaceId, rootExecutionId, target, now,
+                workspaceId,
+                rootExecutionId,
+                target,
+                now,
                 target == DataSyncTableExecutionStatus.LOST ? DataSyncErrorCode.EXECUTION_LOST.getCode() : null,
                 target == DataSyncTableExecutionStatus.LOST ? "执行进程所有权丢失" : null);
     }

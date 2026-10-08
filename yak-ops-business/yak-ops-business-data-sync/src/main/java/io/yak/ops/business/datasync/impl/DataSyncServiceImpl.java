@@ -9,8 +9,8 @@ import io.yak.ops.business.datasync.execution.executor.MultiTableOfflineExecutor
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
-import io.yak.ops.business.datasync.execution.lifecycle.DataSyncTableAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncTableAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlan;
 import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlanner;
 import io.yak.ops.business.datasync.execution.trace.ExecutionTracePage;
@@ -905,8 +905,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             }
             if (multiTable) {
                 multiTableOfflineExecutor.cancel(id);
-                tableAttemptLifecycle.cancelUnfinished(
-                        workspaceId, id, DataSyncTableExecutionStatus.CANCELED);
+                tableAttemptLifecycle.cancelUnfinished(workspaceId, id, DataSyncTableExecutionStatus.CANCELED);
             } else {
                 attemptLifecycle.cancelActiveAttempt(workspaceId, id);
             }
@@ -924,8 +923,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         DataSyncErrorCode.EXECUTION_LOST.getCode(),
                         DataSyncErrorCode.EXECUTION_LOST.getMessage())) {
                     if (multiTable) {
-                        tableAttemptLifecycle.cancelUnfinished(
-                                workspaceId, id, DataSyncTableExecutionStatus.LOST);
+                        tableAttemptLifecycle.cancelUnfinished(workspaceId, id, DataSyncTableExecutionStatus.LOST);
                     }
                     attemptLifecycle.recordExecutionLost(workspaceId, id, "无法定位进程内运行句柄，Execution 已标记为 LOST");
                 }
@@ -934,8 +932,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             } else {
                 if (multiTable) {
-                    tableAttemptLifecycle.cancelUnfinished(
-                            workspaceId, id, DataSyncTableExecutionStatus.CANCELED);
+                    tableAttemptLifecycle.cancelUnfinished(workspaceId, id, DataSyncTableExecutionStatus.CANCELED);
                 } else {
                     attemptLifecycle.cancelActiveAttempt(workspaceId, id);
                 }
@@ -949,8 +946,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private boolean isMultiTableExecution(DataSyncInstanceEntity instance) {
-        if (instance.getSyncType() != DataSyncType.OFFLINE
-                || StringUtils.isBlank(instance.getDefinitionSnapshot())) return false;
+        if (instance.getSyncType() != DataSyncType.OFFLINE || StringUtils.isBlank(instance.getDefinitionSnapshot()))
+            return false;
         DataSyncDefinitionSnapshotVO snapshot =
                 JSONUtils.parseObject(instance.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class);
         return snapshot.getTableRoutes() != null && snapshot.getTableRoutes().size() > 1;
@@ -1781,7 +1778,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         Runnable submit;
         if (DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) {
             submit = () -> realtimeSyncExecutor.submit(workspaceId, instanceId, snapshot);
-        } else if (snapshot.getTableRoutes() != null && snapshot.getTableRoutes().size() > 1) {
+        } else if (snapshot.getTableRoutes() != null
+                && snapshot.getTableRoutes().size() > 1) {
             submit = () -> multiTableOfflineExecutor.submit(workspaceId, instanceId, snapshot);
         } else {
             submit = () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
@@ -2199,15 +2197,13 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private DataSyncTableAttemptVO toTableAttemptVO(DataSyncTableAttemptEntity source) {
-        DataSyncTableAttemptVO target =
-                BeanCopyUtils.copy(source, DataSyncTableAttemptVO.class, "status");
+        DataSyncTableAttemptVO target = BeanCopyUtils.copy(source, DataSyncTableAttemptVO.class, "status");
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
         return target;
     }
 
     private DataSyncTableExecutionVO toTableExecutionVO(DataSyncTableExecutionEntity source) {
-        DataSyncTableExecutionVO target =
-                BeanCopyUtils.copy(source, DataSyncTableExecutionVO.class, "status");
+        DataSyncTableExecutionVO target = BeanCopyUtils.copy(source, DataSyncTableExecutionVO.class, "status");
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
         return target;
     }
