@@ -804,6 +804,19 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     @Override
+    public List<DataSyncTableAttemptVO> queryTableAttempts(String instanceId, String tableExecutionId) {
+        String workspaceId = WorkspaceContext.requireWorkspaceId();
+        requireInstance(workspaceId, instanceId);
+        DataSyncTableExecutionEntity table = tableExecutionRepository
+                .queryById(workspaceId, tableExecutionId)
+                .filter(value -> instanceId.equals(value.getExecutionId()))
+                .orElseThrow(() -> new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_FOUND));
+        return tableAttemptRepository.queryByTableExecution(workspaceId, table.getId()).stream()
+                .map(this::toTableAttemptVO)
+                .toList();
+    }
+
+    @Override
     public List<DataSyncExecutionEventVO> queryExecutionEvents(String instanceId) {
         String workspaceId = WorkspaceContext.requireWorkspaceId();
         requireInstance(workspaceId, instanceId);
@@ -2185,6 +2198,20 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         return target;
     }
 
+    private DataSyncTableAttemptVO toTableAttemptVO(DataSyncTableAttemptEntity source) {
+        DataSyncTableAttemptVO target =
+                BeanCopyUtils.copy(source, DataSyncTableAttemptVO.class, "status");
+        target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
+        return target;
+    }
+
+    private DataSyncTableExecutionVO toTableExecutionVO(DataSyncTableExecutionEntity source) {
+        DataSyncTableExecutionVO target =
+                BeanCopyUtils.copy(source, DataSyncTableExecutionVO.class, "status");
+        target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
+        return target;
+    }
+
     private DataSyncInstanceVO toInstanceVO(DataSyncInstanceEntity source, boolean includeSnapshot) {
         DataSyncInstanceVO target = BeanCopyUtils.copy(
                 source, DataSyncInstanceVO.class, "syncType", "triggerType", "status", "definitionSnapshot");
@@ -2194,8 +2221,15 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                 source.getTriggerType() == null ? null : source.getTriggerType().name());
         target.setStatus(source.getStatus() == null ? null : source.getStatus().name());
         if (includeSnapshot && StringUtils.isNotBlank(source.getDefinitionSnapshot())) {
-            target.setDefinitionSnapshot(
-                    JSONUtils.parseObject(source.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class));
+            DataSyncDefinitionSnapshotVO snapshot =
+                    JSONUtils.parseObject(source.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class);
+            target.setDefinitionSnapshot(snapshot);
+            if (snapshot.getTableRoutes() != null && snapshot.getTableRoutes().size() > 1) {
+                target.setTableExecutions(
+                        tableExecutionRepository.queryByExecution(source.getWorkspaceId(), source.getId()).stream()
+                                .map(this::toTableExecutionVO)
+                                .toList());
+            }
         }
         return target;
     }
