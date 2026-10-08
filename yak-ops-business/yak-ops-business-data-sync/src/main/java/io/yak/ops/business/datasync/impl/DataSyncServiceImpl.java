@@ -1202,12 +1202,8 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         List<DataSyncTableRouteEntity> routes = requirePersistedTableRoutes(task);
         DataSyncWriteMode writeMode = taskWriteMode(task);
         validateWriteMode(task.getSyncType(), writeMode);
-        if (routes.size() > 1) {
-            throw new DataSyncException(
-                    DataSyncErrorCode.INVALID_TASK,
-                    task.getSyncType() == DataSyncType.REALTIME
-                            ? "REALTIME 当前只支持单 Route"
-                            : "OFFLINE Multi-Table Runtime 将由后续 PR 开启");
+        if (routes.size() > 1 && task.getSyncType() == DataSyncType.REALTIME) {
+            throw new DataSyncException(DataSyncErrorCode.INVALID_TASK, "REALTIME 当前只支持单 Route");
         }
 
         for (DataSyncTableRouteEntity route : routes) {
@@ -1750,9 +1746,14 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     }
 
     private void submitAfterCommit(String workspaceId, String instanceId, DataSyncDefinitionSnapshotVO snapshot) {
-        Runnable submit = DataSyncType.REALTIME.name().equals(snapshot.getSyncType())
-                ? () -> realtimeSyncExecutor.submit(workspaceId, instanceId, snapshot)
-                : () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
+        Runnable submit;
+        if (DataSyncType.REALTIME.name().equals(snapshot.getSyncType())) {
+            submit = () -> realtimeSyncExecutor.submit(workspaceId, instanceId, snapshot);
+        } else if (snapshot.getTableRoutes() != null && snapshot.getTableRoutes().size() > 1) {
+            submit = () -> multiTableOfflineExecutor.submit(workspaceId, instanceId, snapshot);
+        } else {
+            submit = () -> offlineSyncExecutor.submit(workspaceId, instanceId, snapshot);
+        }
         runAfterCommit(submit);
     }
 
