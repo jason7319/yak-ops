@@ -105,11 +105,7 @@ public class DataSyncTableAttemptRepositoryImpl
 
     @Override
     public int markActiveAsLost(
-            String workspaceId,
-            String tableExecutionId,
-            LocalDateTime finishedAt,
-            Integer errorCode,
-            String message) {
+            String workspaceId, String tableExecutionId, LocalDateTime finishedAt, Integer errorCode, String message) {
         if (StringUtils.isBlank(workspaceId) || StringUtils.isBlank(tableExecutionId)) return 0;
         DataSyncTableAttemptEntity update = new DataSyncTableAttemptEntity();
         update.setStatus(DataSyncAttemptStatus.LOST);
