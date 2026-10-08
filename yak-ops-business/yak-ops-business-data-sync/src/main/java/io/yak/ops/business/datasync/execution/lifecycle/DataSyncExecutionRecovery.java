@@ -5,6 +5,7 @@ import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.common.bean.vo.datasync.DataSyncDefinitionSnapshotVO;
 import io.yak.ops.common.enums.datasync.DataSyncInstanceStatus;
+import io.yak.ops.common.enums.datasync.DataSyncTableExecutionStatus;
 import io.yak.ops.common.enums.datasync.DataSyncType;
 import io.yak.ops.common.util.DateUtils;
 import io.yak.ops.common.util.JSONUtils;
@@ -48,6 +49,9 @@ public class DataSyncExecutionRecovery {
     private DataSyncAttemptLifecycle attemptLifecycle;
 
     @Resource
+    private DataSyncTableAttemptLifecycle tableAttemptLifecycle;
+
+    @Resource
     private OfflineSyncExecutor offlineSyncExecutor;
 
     @Resource
@@ -62,10 +66,17 @@ public class DataSyncExecutionRecovery {
         int executions = instanceRepository.markActiveAsLost(
                 now, DataSyncErrorCode.EXECUTION_LOST.getCode(), DataSyncErrorCode.EXECUTION_LOST.getMessage());
 
-        activeExecutions.stream()
-                .filter(this::runtimeExecution)
-                .forEach(execution -> attemptLifecycle.recordExecutionLost(
-                        execution.getWorkspaceId(), execution.getId(), "应用启动发现旧进程遗留 Runtime Execution，已标记为 LOST"));
+        for (DataSyncInstanceEntity execution : activeExecutions) {
+            if (!runtimeExecution(execution)) continue;
+            if (isMultiTable(execution)) {
+                tableAttemptLifecycle.cancelUnfinished(
+                        execution.getWorkspaceId(), execution.getId(),
+                        DataSyncTableExecutionStatus.LOST);
+            }
+            attemptLifecycle.recordExecutionLost(
+                    execution.getWorkspaceId(), execution.getId(),
+                    "应用启动发现旧进程遗留 Runtime Execution，已标记为 LOST");
+        }
 
         int retryScheduled = 0;
         int retryLost = 0;
@@ -172,6 +183,20 @@ public class DataSyncExecutionRecovery {
                 execution.getWorkspaceId(),
                 execution.getId(),
                 detail);
+    }
+
+    private boolean isMultiTable(DataSyncInstanceEntity execution) {
+        if (execution.getSyncType() != DataSyncType.OFFLINE
+                || StringUtils.isBlank(execution.getDefinitionSnapshot())) return false;
+        try {
+            DataSyncDefinitionSnapshotVO snapshot =
+                    JSONUtils.parseObject(execution.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class);
+            return snapshot.getTableRoutes() != null && snapshot.getTableRoutes().size() > 1;
+        } catch (RuntimeException exception) {
+            LOG.warn("检查多表快照失败，workspaceId={}, executionId={}, error={}",
+                    execution.getWorkspaceId(), execution.getId(), safeMessage(exception));
+            return false;
+        }
     }
 
     private boolean runtimeExecution(DataSyncInstanceEntity execution) {
