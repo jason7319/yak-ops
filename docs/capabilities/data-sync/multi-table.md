@@ -1,6 +1,6 @@
 # Data Sync Multi-Table Route Contract
 
-Status: Active — v1.3 PR2 Definition Snapshot + Table Execution
+Status: Active — v1.3 PR3 Multi-Table Runtime + Per-Table Retry / Metrics
 
 Scope:
 
@@ -43,7 +43,7 @@ Target Table
 
 后续 Incremental Cursor、Schema Baseline、Table Execution、Route Metrics 与 Health 都以 Route ID 作为产品身份，不通过表名字符串拼接身份。
 
-PR1 已建立 Route Contract + Persistence；PR2 进一步让 Root Execution 冻结全部 Route，并为每条 Route 创建稳定 Table Execution。真正的逐表 Runtime / Retry / Metrics 与 Editor 仍属于后续 PR。
+PR1 已建立 Route Contract + Persistence；PR2 进一步让 Root Execution 冻结全部 Route，并为每条 Route 创建稳定 Table Execution。PR3 进一步开放 OFFLINE 逐表 Runtime、失败隔离和表级 Retry / Metrics；多表编辑器仍由 PR4 完成。
 
 ## 2. Ownership
 
@@ -251,18 +251,53 @@ PLANNED
 
 Root Execution 与全部 Table Execution 在 Runtime 提交前创建；任何 Route identity 都不能通过 Source / Target table name 临时拼接。
 
-## 9. Current Runtime Boundary
+## 9. OFFLINE Multi-Table Runtime (PR3)
 
-PR2 已把定义 Source of Truth 切到 persisted Route + frozen `tableRoutes[]`，但现有 OFFLINE / REALTIME Executor 仍只消费首 Route 的兼容投影。
-
-为了避免 PR3 前发生“多 Route 任务只执行第一张表”的数据错误，当前发布 / 运行校验明确拒绝 Route 数量大于 1：
+OFFLINE Task 通过 persisted Route 集合逐条服务端校验，Root 创建时冻结 `tableRoutes[]`，运行后按冻结顺序执行每张表：
 
 ```text
-N Route Snapshot = contract ready
-N Route Runtime = blocked until PR3
+Root Execution (RUNNING)
+├── Table Execution users      SUCCEEDED
+├── Table Execution orders     FAILED
+└── Table Execution products   SUCCEEDED
+        ↓
+Root Execution (FAILED)
 ```
 
-因此 PR2 合并仍不代表产品已经开放 Multi-Table Runtime。
+单张表最终失败不会阻止后续表继续运行；Root 在所有表结束后汇总为 SUCCEEDED 或 FAILED。当前单任务并发上限为 1（顺序执行），不使用无限线程、分布式 Worker 或复杂用户调优 UI。
+
+表级生命周期由 `DataSyncTableAttemptLifecycle` 管理：
+
+```text
+PLANNED → PENDING → RUNNING
+                      ├── SUCCEEDED
+                      ├── FAILED
+                      ├── RETRY_WAITING → RUNNING
+                      ├── CANCELED
+                      └── LOST
+```
+
+Table Execution 保留自己的 `routeId / currentAttempt / readRows / writeRows / error`。
+`yak_ops_data_sync_table_attempt` 独立保存每张表内的 Attempt 历史，`(workspace_id, table_execution_id, attempt_no)` 唯一；成功的表在同一 Root 内永不被后续失败表的 Retry 重放。
+
+表级 Retry 使用 Task Root 冻结的 Retry Policy，SMART 仍使用已有失败分类和写入安全限制。对于 OFFLINE APPEND / OVERWRITE，Runtime 启动后 SMART 不自动重放；显式 FIXED 策略仍保持其历史语义和重复写风险。不提供 exactly-once 承诺。
+
+Root 的 `readRows / writeRows` 汇总各 Table Execution **当前或最终 Attempt 镜像**，不把一张表的历史重试行数相加，也不承诺是实际提交业务行数。
+
+### Cancel / Restart
+
+用户取消整个 Root 时停止后续 Route 的调度，正在运行的 LocalExecution 收到取消，未结束的 Table Execution 进入 CANCELED；成功表的历史记录保持 SUCCEEDED。取消不能重新启动已成功 Route。
+
+单节点进程异常结束后，旧进程遗留的 PENDING / RUNNING Root 继续标为 LOST；相应未结束的表级执行与 Attempt 标为 LOST。PR3 **不承诺**在 APPEND 可能存在部分已提交数据时跨进程自动重放；增量恢复与健康治理留给后续 PR。
+
+### Read Model
+
+- `GET /api/v1/data-sync/instances/{id}`：对 OFFLINE 多表 Root 返回 `tableExecutions[]`，包含 Route identity、状态、行数和脱敏错误
+- `GET /api/v1/data-sync/instances/{id}/tables/{tableExecutionId}/attempts`：按 Root + Table + Workspace 校验，查询该表 Attempt 历史
+
+旧单表 Execution 继续使用原有 Root Attempt / Trace 查询模型。多表 Attempt Trace 内部按 Table Execution ID 隔离存储；对应独立 UI 和 Trace 页面由后续 PR 接入。
+
+REALTIME CDC 仍严格保持单 Route。多表 Task 的创建 / 编辑 UI 和 API 仍由 PR4 处理，不能把 PR3 的执行能力误写成“全库同步”或“实时多表同步”。
 
 ## 10. definitionVersion
 
@@ -293,27 +328,19 @@ v1.3 当前开发期 Draft：
 ```text
 V4__data_sync_multi_table_route.sql
 V5__data_sync_table_execution.sql
+V6__data_sync_table_attempt.sql
 ```
 
 这些文件只属于 v1.3 可重建开发 / E2E 历史；Release Freeze 前必须按照 Flyway Rules 一起审查并收口为最多一个正式 `V4__v1_3_0.sql`。
 
-## 12. PR2 Non-Goals
+## 12. PR3 Non-Goals
 
-PR2 不做：
-
-- 多 Route 创建 / 编辑 HTTP DTO。
-- OFFLINE Multi-Table Runtime。
-- Table Execution Runtime 状态迁移。
-- per-table Attempt / Retry / Metrics。
-- Multi-Table Editor。
+- Multi-Route 创建 / 编辑 HTTP UI / API（PR4）。
 - REALTIME Multi-Table CDC。
-- Incremental Cursor。
-- Catalog Refresh / Schema Diff。
-- Schema Evolution。
-- 删除 Snapshot 首 Route 兼容投影。
+- 无界表级并行和 Distributed Worker。
+- 增量 Cursor / 自动续传。
+- Schema Diff / Evolution。
+- Exactly-once 和跨库事务原子性。
+- 失败的 APPEND 数据的安全自动补偿。
 
-下一步：
-
-```text
-PR3 — Multi-Table Runtime + Per-Table Retry / Metrics
-```
+下一步：PR4 — Multi-Table Sync Editor + Schema Preview。
