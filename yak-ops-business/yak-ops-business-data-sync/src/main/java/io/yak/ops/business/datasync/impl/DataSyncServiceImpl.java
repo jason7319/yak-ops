@@ -5,9 +5,11 @@ import io.yak.ops.business.datasync.DataSyncService;
 import io.yak.ops.business.datasync.catalog.DataSyncCatalogColumns;
 import io.yak.ops.business.datasync.exception.DataSyncErrorCode;
 import io.yak.ops.business.datasync.exception.DataSyncException;
+import io.yak.ops.business.datasync.execution.executor.MultiTableOfflineExecutor;
 import io.yak.ops.business.datasync.execution.executor.OfflineSyncExecutor;
 import io.yak.ops.business.datasync.execution.executor.RealtimeSyncExecutor;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncAttemptLifecycle;
+import io.yak.ops.business.datasync.execution.lifecycle.DataSyncTableAttemptLifecycle;
 import io.yak.ops.business.datasync.execution.lifecycle.DataSyncExecutionRegistry;
 import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlan;
 import io.yak.ops.business.datasync.execution.planning.OfflineRuntimePlanner;
@@ -68,6 +70,8 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSinkTraceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSourceTraceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTableAttemptVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTableExecutionVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTableRouteSnapshotVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTableRouteVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
@@ -97,6 +101,7 @@ import io.yak.ops.dao.entity.datasync.DataSyncAttemptEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncExecutionEventEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncInstanceEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncScheduleEntity;
+import io.yak.ops.dao.entity.datasync.DataSyncTableAttemptEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTableExecutionEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTableRouteEntity;
 import io.yak.ops.dao.entity.datasync.DataSyncTaskEntity;
@@ -110,6 +115,7 @@ import io.yak.ops.dao.repository.datasync.DataSyncOperationsStatusStats;
 import io.yak.ops.dao.repository.datasync.DataSyncOperationsSummaryStats;
 import io.yak.ops.dao.repository.datasync.DataSyncOperationsTrendStats;
 import io.yak.ops.dao.repository.datasync.DataSyncScheduleRepository;
+import io.yak.ops.dao.repository.datasync.DataSyncTableAttemptRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTableExecutionRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTableRouteRepository;
 import io.yak.ops.dao.repository.datasync.DataSyncTaskPageQuery;
@@ -168,6 +174,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private DataSyncTableExecutionRepository tableExecutionRepository;
 
     @Resource
+    private DataSyncTableAttemptRepository tableAttemptRepository;
+
+    @Resource
     private DataSyncInstanceRepository instanceRepository;
 
     @Resource
@@ -195,6 +204,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
     private OfflineSyncExecutor offlineSyncExecutor;
 
     @Resource
+    private MultiTableOfflineExecutor multiTableOfflineExecutor;
+
+    @Resource
     private RealtimeSyncExecutor realtimeSyncExecutor;
 
     @Resource
@@ -202,6 +214,9 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
 
     @Resource
     private DataSyncAttemptLifecycle attemptLifecycle;
+
+    @Resource
+    private DataSyncTableAttemptLifecycle tableAttemptLifecycle;
 
     @Resource
     private ExecutionTraceStore executionTraceStore;
