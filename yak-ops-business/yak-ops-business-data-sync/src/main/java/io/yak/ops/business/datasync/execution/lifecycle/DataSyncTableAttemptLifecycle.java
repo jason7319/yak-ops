@@ -111,7 +111,13 @@ public class DataSyncTableAttemptLifecycle {
         LocalDateTime now = DateUtils.now();
         for (DataSyncTableExecutionEntity table : tableExecutionRepository.queryByExecution(workspaceId, rootExecutionId)) {
             if (table.getStatus() != null && !table.getStatus().isTerminal()) {
-                tableAttemptRepository.cancelActive(workspaceId, table.getId(), now);
+                if (target == DataSyncTableExecutionStatus.LOST) {
+                    tableAttemptRepository.markActiveAsLost(
+                            workspaceId, table.getId(), now,
+                            DataSyncErrorCode.EXECUTION_LOST.getCode(), "执行进程所有权丢失");
+                } else {
+                    tableAttemptRepository.cancelActive(workspaceId, table.getId(), now);
+                }
             }
         }
         tableExecutionRepository.finishUnfinished(
