@@ -877,6 +877,7 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         if (instance.getStatus() == null || instance.getStatus().isTerminal()) {
             return toInstanceVO(instance, true);
         }
+        boolean multiTable = isMultiTableExecution(instance);
 
         if (instance.getSyncType() == DataSyncType.REALTIME) {
             DataSyncTaskEntity task =
@@ -884,21 +885,22 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
             if (task != null) updateDesiredState(workspaceId, task, DataSyncDesiredState.STOPPED);
         }
 
-        if (instance.getStatus() == DataSyncInstanceStatus.PENDING) {
-            if (!instanceRepository.cancelExecution(workspaceId, id, DataSyncInstanceStatus.PENDING, DateUtils.now())) {
+        if (instance.getStatus() == DataSyncInstanceStatus.PENDING
+                || instance.getStatus() == DataSyncInstanceStatus.RETRY_WAITING) {
+            if (!instanceRepository.cancelExecution(workspaceId, id, instance.getStatus(), DateUtils.now())) {
                 throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             }
-            attemptLifecycle.cancelActiveAttempt(workspaceId, id);
-            attemptLifecycle.recordExecutionCanceled(workspaceId, id);
-        } else if (instance.getStatus() == DataSyncInstanceStatus.RETRY_WAITING) {
-            if (!instanceRepository.cancelExecution(
-                    workspaceId, id, DataSyncInstanceStatus.RETRY_WAITING, DateUtils.now())) {
-                throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
+            if (multiTable) {
+                multiTableOfflineExecutor.cancel(id);
+                tableAttemptLifecycle.cancelUnfinished(
+                        workspaceId, id, DataSyncTableExecutionStatus.CANCELED);
+            } else {
+                attemptLifecycle.cancelActiveAttempt(workspaceId, id);
             }
-            attemptLifecycle.cancelActiveAttempt(workspaceId, id);
             attemptLifecycle.recordExecutionCanceled(workspaceId, id);
         } else if (instance.getStatus() == DataSyncInstanceStatus.RUNNING) {
-            if (!executionRegistry.cancel(id)) {
+            boolean canceled = multiTable ? multiTableOfflineExecutor.cancel(id) : executionRegistry.cancel(id);
+            if (!canceled) {
                 if (instanceRepository.transitionStatus(
                         workspaceId,
                         id,
@@ -908,13 +910,22 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
                         DateUtils.now(),
                         DataSyncErrorCode.EXECUTION_LOST.getCode(),
                         DataSyncErrorCode.EXECUTION_LOST.getMessage())) {
+                    if (multiTable) {
+                        tableAttemptLifecycle.cancelUnfinished(
+                                workspaceId, id, DataSyncTableExecutionStatus.LOST);
+                    }
                     attemptLifecycle.recordExecutionLost(workspaceId, id, "无法定位进程内运行句柄，Execution 已标记为 LOST");
                 }
             } else if (!instanceRepository.cancelExecution(
                     workspaceId, id, DataSyncInstanceStatus.RUNNING, DateUtils.now())) {
                 throw new DataSyncException(DataSyncErrorCode.INSTANCE_NOT_CANCELABLE);
             } else {
-                attemptLifecycle.cancelActiveAttempt(workspaceId, id);
+                if (multiTable) {
+                    tableAttemptLifecycle.cancelUnfinished(
+                            workspaceId, id, DataSyncTableExecutionStatus.CANCELED);
+                } else {
+                    attemptLifecycle.cancelActiveAttempt(workspaceId, id);
+                }
                 attemptLifecycle.recordExecutionCanceled(workspaceId, id);
             }
         } else {
@@ -922,6 +933,14 @@ public class DataSyncServiceImpl implements DataSyncService, DataSyncScheduleFir
         }
 
         return toInstanceVO(requireInstance(workspaceId, id), true);
+    }
+
+    private boolean isMultiTableExecution(DataSyncInstanceEntity instance) {
+        if (instance.getSyncType() != DataSyncType.OFFLINE
+                || StringUtils.isBlank(instance.getDefinitionSnapshot())) return false;
+        DataSyncDefinitionSnapshotVO snapshot =
+                JSONUtils.parseObject(instance.getDefinitionSnapshot(), DataSyncDefinitionSnapshotVO.class);
+        return snapshot.getTableRoutes() != null && snapshot.getTableRoutes().size() > 1;
     }
 
     private DataSyncInstanceEntity requireOfflineTraceInstance(String workspaceId, String instanceId) {
