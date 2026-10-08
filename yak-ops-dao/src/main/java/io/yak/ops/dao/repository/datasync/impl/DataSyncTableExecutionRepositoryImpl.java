@@ -41,7 +41,6 @@ public class DataSyncTableExecutionRepositoryImpl
                 .eq(DataSyncTableExecutionEntity::getId, id)));
     }
 
-
     @Override
     public boolean transition(
             String workspaceId,
@@ -76,12 +75,18 @@ public class DataSyncTableExecutionRepositoryImpl
                                 .eq(DataSyncTableExecutionEntity::getWorkspaceId, workspaceId)
                                 .eq(DataSyncTableExecutionEntity::getId, id)
                                 .eq(DataSyncTableExecutionEntity::getStatus, expected)
-                                .set(target == DataSyncTableExecutionStatus.RUNNING,
-                                        DataSyncTableExecutionEntity::getFinishTime, null)
-                                .set(target == DataSyncTableExecutionStatus.RUNNING,
-                                        DataSyncTableExecutionEntity::getErrorCode, null)
-                                .set(target == DataSyncTableExecutionStatus.RUNNING,
-                                        DataSyncTableExecutionEntity::getErrorMessage, null))
+                                .set(
+                                        target == DataSyncTableExecutionStatus.RUNNING,
+                                        DataSyncTableExecutionEntity::getFinishTime,
+                                        null)
+                                .set(
+                                        target == DataSyncTableExecutionStatus.RUNNING,
+                                        DataSyncTableExecutionEntity::getErrorCode,
+                                        null)
+                                .set(
+                                        target == DataSyncTableExecutionStatus.RUNNING,
+                                        DataSyncTableExecutionEntity::getErrorMessage,
+                                        null))
                 > 0;
     }
 
@@ -129,8 +134,10 @@ public class DataSyncTableExecutionRepositoryImpl
                 Wrappers.<DataSyncTableExecutionEntity>lambdaUpdate()
                         .eq(DataSyncTableExecutionEntity::getWorkspaceId, workspaceId)
                         .eq(DataSyncTableExecutionEntity::getExecutionId, executionId)
-                        .in(DataSyncTableExecutionEntity::getStatus,
-                                List.of(DataSyncTableExecutionStatus.PLANNED,
+                        .in(
+                                DataSyncTableExecutionEntity::getStatus,
+                                List.of(
+                                        DataSyncTableExecutionStatus.PLANNED,
                                         DataSyncTableExecutionStatus.PENDING,
                                         DataSyncTableExecutionStatus.RUNNING,
                                         DataSyncTableExecutionStatus.RETRY_WAITING)));
