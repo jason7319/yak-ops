@@ -206,6 +206,10 @@ public class MultiTableOfflineExecutor {
             RouteOutcome outcome = executeAttemptRuntime(
                     workspaceId, table.getId(), attempt.getId(), attemptNo, runtimeSnapshot, control, metrics);
             if (outcome.status() == ExecutionStatus.CANCELED) control.cancel();
+            if (control.canceled && rootRunning(workspaceId, rootExecutionId)) {
+                instanceRepository.cancelExecution(
+                        workspaceId, rootExecutionId, DataSyncInstanceStatus.RUNNING, DateUtils.now());
+            }
             if (control.canceled || !rootRunning(workspaceId, rootExecutionId)) {
                 finishPendingAfterRootChange(workspaceId, rootExecutionId);
                 return;
