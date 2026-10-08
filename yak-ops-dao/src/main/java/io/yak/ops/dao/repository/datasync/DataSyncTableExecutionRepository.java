@@ -20,13 +20,23 @@ public interface DataSyncTableExecutionRepository extends BaseRepository<DataSyn
     List<DataSyncTableExecutionEntity> queryByExecution(String workspaceId, String executionId);
 
     boolean transition(
-            String workspaceId, String id, DataSyncTableExecutionStatus expected,
-            DataSyncTableExecutionStatus target, int attemptNo, long readRows, long writeRows,
-            Integer errorCode, String errorMessage);
+            String workspaceId,
+            String id,
+            DataSyncTableExecutionStatus expected,
+            DataSyncTableExecutionStatus target,
+            int attemptNo,
+            long readRows,
+            long writeRows,
+            Integer errorCode,
+            String errorMessage);
 
     boolean updateMetrics(String workspaceId, String id, int attemptNo, long readRows, long writeRows);
 
     int finishUnfinished(
-            String workspaceId, String executionId, DataSyncTableExecutionStatus terminal,
-            LocalDateTime finishTime, Integer errorCode, String errorMessage);
+            String workspaceId,
+            String executionId,
+            DataSyncTableExecutionStatus terminal,
+            LocalDateTime finishTime,
+            Integer errorCode,
+            String errorMessage);
 }
