@@ -1,6 +1,7 @@
 package io.yak.ops.common.bean.vo.datasync;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -67,6 +68,9 @@ public class DataSyncInstanceVO {
 
     /** 详情查询时返回的 Execution 脱敏定义快照；未来所有 Retry Attempt 必须复用，分页列表中为空。 */
     private DataSyncDefinitionSnapshotVO definitionSnapshot;
+
+    /** 多表 Root 详情附带的表级执行状态与指标；列表页和单表旧接口不展开。 */
+    private List<DataSyncTableExecutionVO> tableExecutions;
 
     /** 实例记录创建时间，通常早于或等于实际开始时间。 */
     private LocalDateTime createTime;
