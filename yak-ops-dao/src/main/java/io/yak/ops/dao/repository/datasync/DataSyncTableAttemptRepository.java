@@ -24,5 +24,8 @@ public interface DataSyncTableAttemptRepository extends BaseRepository<DataSyncT
 
     int cancelActive(String workspaceId, String tableExecutionId, LocalDateTime finishedAt);
 
+    int markActiveAsLost(
+            String workspaceId, String tableExecutionId, LocalDateTime finishedAt, Integer errorCode, String message);
+
     int markActiveAsLost(LocalDateTime finishedAt, Integer errorCode, String message);
 }
