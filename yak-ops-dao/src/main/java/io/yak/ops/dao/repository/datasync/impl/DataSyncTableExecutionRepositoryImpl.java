@@ -64,7 +64,7 @@ public class DataSyncTableExecutionRepositoryImpl
         update.setCurrentAttempt(attemptNo);
         update.setReadRows(readRows);
         update.setWriteRows(writeRows);
-        if (target == DataSyncTableExecutionStatus.RUNNING) update.setStartTime(DateUtils.now());
+        if (target == DataSyncTableExecutionStatus.RUNNING && attemptNo == 1) update.setStartTime(DateUtils.now());
         if (target.isTerminal()) update.setFinishTime(DateUtils.now());
         if (errorCode != null) update.setErrorCode(errorCode);
         if (errorMessage != null) update.setErrorMessage(errorMessage);
