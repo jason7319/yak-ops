@@ -103,6 +103,26 @@ public class DataSyncTableAttemptRepositoryImpl
     }
 
     @Override
+    public int markActiveAsLost(
+            String workspaceId, String tableExecutionId, LocalDateTime finishedAt,
+            Integer errorCode, String message) {
+        if (StringUtils.isBlank(workspaceId) || StringUtils.isBlank(tableExecutionId)) return 0;
+        DataSyncTableAttemptEntity update = new DataSyncTableAttemptEntity();
+        update.setStatus(DataSyncAttemptStatus.LOST);
+        update.setFinishTime(finishedAt == null ? DateUtils.now() : finishedAt);
+        update.setErrorCode(errorCode);
+        update.setErrorMessage(message);
+        update.initUpdate();
+        return tableAttemptMapper.update(
+                update,
+                Wrappers.<DataSyncTableAttemptEntity>lambdaUpdate()
+                        .eq(DataSyncTableAttemptEntity::getWorkspaceId, workspaceId)
+                        .eq(DataSyncTableAttemptEntity::getTableExecutionId, tableExecutionId)
+                        .in(DataSyncTableAttemptEntity::getStatus,
+                                List.of(DataSyncAttemptStatus.PENDING, DataSyncAttemptStatus.RUNNING)));
+    }
+
+    @Override
     public int markActiveAsLost(LocalDateTime finishedAt, Integer errorCode, String message) {
         DataSyncTableAttemptEntity update = new DataSyncTableAttemptEntity();
         update.setStatus(DataSyncAttemptStatus.LOST);
