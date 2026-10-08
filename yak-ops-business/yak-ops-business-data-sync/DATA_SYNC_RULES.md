@@ -86,6 +86,11 @@ executor 可以依赖 planning / lifecycle / realtime；lifecycle 和 realtime �
 
 ## Execution and Metrics Implementation
 
+- v1.3 PR3 的 OFFLINE 多表只由 MultiTableOfflineExecutor 按冻结 Route 顺序执行；每个 Root 同时只运行一张表，不能把多表逻辑塞进旧单表 Attempt Loop。Table Attempt 与 Table Execution 状态迁移集中在 DataSyncTableAttemptLifecycle，不能由 Executor 随意覆盖终态。
+- 多表 Root Status 是表级终态聚合：单表 FAILED 不取消后续表；所有表结束后只要有 FAILED / LOST，Root 就不能 SUCCEEDED。Retry 不重放该 Root 中已 SUCCEEDED 的 Route。
+- 表级 Metrics 是本表当前或最终 Attempt 镜像，Root 汇总每表的最后镜像；禁止累计失败历史 Attempt 后重复计数。SMART 对 APPEND / OVERWRITE 的启动后重放限制同样适用于 Table Attempt。
+- Cancel 必须停止后续 Route，正在运行的 LocalExecution 收到 cancel；启动 LOST 时同步标记未结束 Table Execution 和 Attempt，不能误把它们标成 SUCCEEDED。
+- 表级 Attempt Trace 使用 Table Execution ID 命名空间避免多张表相同 attemptNo 发生文件覆盖，安全与脱敏规则不变。
 - v1.3 PR2 起 Root definitionSnapshot 必须冻结有序 `tableRoutes[]`；每条 Route 保存稳定 routeId、Source / Target endpoint、Mapping、Auto Create，以及 OFFLINE Route 自己的 Effective Runtime Config / planning summary。Root 上旧单表字段只允许作为首 Route 兼容投影。
 - Root Execution 创建后、Runtime 提交前必须为每条冻结 Route 创建一条 Table Execution；PR2 状态固定为 PLANNED，禁止在没有 PR3 表级 Runtime 的情况下假写 RUNNING / SUCCEEDED。
 - Table Execution identity 使用持久化 ID + routeId，禁止用 table name 拼接；同一 Root 内 routeId 与 routeOrder 都必须唯一。

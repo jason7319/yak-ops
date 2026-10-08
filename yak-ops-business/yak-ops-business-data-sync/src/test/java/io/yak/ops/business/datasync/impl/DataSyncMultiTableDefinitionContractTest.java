@@ -60,9 +60,10 @@ class DataSyncMultiTableDefinitionContractTest {
     }
 
     @Test
-    void shouldRejectMultiRouteRunUntilTableRuntimeIsImplemented() throws Exception {
+    void shouldRejectRealtimeMultiRouteRun() throws Exception {
         DataSyncServiceImpl service = new DataSyncServiceImpl();
         DataSyncTaskEntity task = offlineTask();
+        task.setSyncType(DataSyncType.REALTIME);
         DataSyncTestTableRouteRepository.inject(
                 service,
                 List.of(
@@ -77,7 +78,7 @@ class DataSyncMultiTableDefinitionContractTest {
 
         assertEquals(DataSyncErrorCode.INVALID_TASK, exception.getErrorCode());
         assertEquals(
-                "同步任务参数不合法：OFFLINE Multi-Table Runtime 将由后续 PR 开启",
+                "同步任务参数不合法：REALTIME 当前只支持单 Route",
                 exception.getUserMessage());
     }
 

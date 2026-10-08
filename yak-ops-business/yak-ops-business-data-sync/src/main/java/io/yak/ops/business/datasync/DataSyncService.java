@@ -15,6 +15,7 @@ import io.yak.ops.common.bean.vo.datasync.DataSyncSchedulePreviewVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncScheduleVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSinkTraceVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncSourceTraceVO;
+import io.yak.ops.common.bean.vo.datasync.DataSyncTableAttemptVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskOperationVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTaskVO;
 import io.yak.ops.common.bean.vo.datasync.DataSyncTracePageVO;
@@ -78,6 +79,9 @@ public interface DataSyncService {
     DataSyncInstanceVO queryInstance(String id);
 
     List<DataSyncAttemptVO> queryAttempts(String instanceId);
+
+    /** 按 Workspace 和 Root / Table 关联校验后读取一张表的 Attempt 历史。 */
+    List<DataSyncTableAttemptVO> queryTableAttempts(String instanceId, String tableExecutionId);
 
     List<DataSyncExecutionEventVO> queryExecutionEvents(String instanceId);
 
