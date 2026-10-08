@@ -113,10 +113,15 @@ public class MultiTableOfflineExecutor {
             LOG.error("多表同步异常，workspaceId={}, executionId={}, error={}",
                     workspaceId, rootExecutionId, safeMessage(exception));
             try {
-                tableAttemptLifecycle.cancelUnfinished(
-                        workspaceId, rootExecutionId, DataSyncTableExecutionStatus.LOST);
                 DataSyncInstanceEntity root =
                         instanceRepository.queryById(workspaceId, rootExecutionId).orElse(null);
+                if (root != null && root.getStatus() == DataSyncInstanceStatus.CANCELED) {
+                    tableAttemptLifecycle.cancelUnfinished(
+                            workspaceId, rootExecutionId, DataSyncTableExecutionStatus.CANCELED);
+                    return;
+                }
+                tableAttemptLifecycle.cancelUnfinished(
+                        workspaceId, rootExecutionId, DataSyncTableExecutionStatus.LOST);
                 if (root != null && root.getStatus() == DataSyncInstanceStatus.RUNNING) {
                     long[] totals = totals(workspaceId, rootExecutionId);
                     instanceRepository.completeExecution(
@@ -167,6 +172,10 @@ public class MultiTableOfflineExecutor {
             refreshRootMetrics(workspaceId, rootExecutionId);
         }
 
+        if (control.canceled && rootRunning(workspaceId, rootExecutionId)) {
+            instanceRepository.cancelExecution(
+                    workspaceId, rootExecutionId, DataSyncInstanceStatus.RUNNING, DateUtils.now());
+        }
         if (control.canceled || !rootRunning(workspaceId, rootExecutionId)) {
             finishPendingAfterRootChange(workspaceId, rootExecutionId);
             return;
@@ -196,10 +205,9 @@ public class MultiTableOfflineExecutor {
             };
             RouteOutcome outcome = executeAttemptRuntime(
                     workspaceId, table.getId(), attempt.getId(), attemptNo, runtimeSnapshot, control, metrics);
-            if (control.canceled || !rootRunning(workspaceId, rootExecutionId)
-                    || outcome.status() == ExecutionStatus.CANCELED) {
-                tableAttemptLifecycle.cancelUnfinished(
-                        workspaceId, rootExecutionId, DataSyncTableExecutionStatus.CANCELED);
+            if (outcome.status() == ExecutionStatus.CANCELED) control.cancel();
+            if (control.canceled || !rootRunning(workspaceId, rootExecutionId)) {
+                finishPendingAfterRootChange(workspaceId, rootExecutionId);
                 return;
             }
             if (outcome.status() == ExecutionStatus.SUCCEEDED) {
